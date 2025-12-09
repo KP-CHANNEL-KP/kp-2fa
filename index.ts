@@ -166,7 +166,7 @@ export default {
                     const timeRemaining = TIME_STEP - (Math.floor(Date.now() / 1000) % TIME_STEP);
                     
                     responseText = 
-                        `✅ Your 2FA Code:\n\n` + 
+                        `✅ ဂေါင်းကြီးရဲ့ 2FA Code:\n\n` + 
                         `\`${totpCode}\`\n\n` +
                         `_Expires in ${timeRemaining} seconds_`;
                 }
@@ -177,12 +177,12 @@ export default {
             }
         } else if (messageText.toLowerCase().startsWith('/start')) {
              responseText = 
-                '👋 Welcome to the 2FA Code Generator Bot!\n\n' +
-                'I can generate a 6-digit TOTP code for you based on a Secret Key.\n\n' +
-                'To get a code, type `/code` followed by your **Base32 Secret Key**.\n\n' +
-                'Example: `/code JBSWY3DPEHPK3PXP`';
+                '👋 KP ရဲ့ 2FA bot မှကြိုဆိုပါတယ်!\n\n' +
+                'Telegram Channel => https://t.me/KP_CHANNEL_KP.\n\n' +
+                'ပထမဦးဆုံး အသုံးပြုသူများ /code ဖြင့်သုံးပါ **နမူနာကို အောက်တွင် ကြည့်ပါ**.\n\n' +
+                'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
         } else {
-            responseText = "I only understand the `/code <SECRET_KEY>` command. Type `/start` for help.";
+            responseText = "အသုံးပြုပုံ မှာနေပါတယ် ဂေါင်းကြီး `/code JBSWY3DPEHPK3PXP` command. အဆင်မပြေရင် /start ပြန်နှိပ်ပါ။.";
         }
 
         // Send the response back to Telegram
