@@ -1,4 +1,4 @@
-// index.ts
+// index.ts (Fixing the Base32 Decoding Logic)
 
 // Replace YOUR_BOT_TOKEN with the actual token you got from BotFather
 const BOT_TOKEN = '8581058292:AAHKD5H5PxTuGB7UaSsuhyskUYLoAXHUXz0'; 
@@ -6,39 +6,35 @@ const TIME_STEP = 30; // TOTP time step in seconds (standard is 30)
 const DIGITS = 6;     // TOTP code length (standard is 6)
 const ALGORITHM = 'SHA-1'; // HMAC algorithm (standard is SHA-1)
 
-
 // --- 1. TOTP (Time-based One-Time Password) Logic ---
 
-/**
- * Converts a Base32 encoded secret key string to a binary ArrayBuffer.
- * This is necessary for the cryptographic operations.
- * @param base32 The Base32 encoded string (e.g., from Google Authenticator setup).
- * @returns An ArrayBuffer containing the binary key data.
- */
-function base32ToBuffer(base32: string): ArrayBuffer {
-    // This is a simplified implementation; a full Base32 implementation is complex.
-    // For production, use a reliable Base32 library that works in the Worker environment 
-    // (or ensure keys are provided in a simpler format like hex/base64 if possible).
-    
-    // As a demonstration, we will assume a Base32 implementation is available
-    // or the user provides a simple key. 
-    // Since direct Base32 decoding is complex to implement fully here, 
-    // if you use a library, you'll put its decode logic here.
+// --- Base32 Decoding Function (The Critical Fix) ---
+// This is a robust Base32 decoding implementation required for real 2FA secrets.
+const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-    // *** IMPORTANT: If your keys are standard Base32 (e.g., from Google Authenticator), 
-    // you must replace this placeholder with a working Base32 decoder. ***
+function base32ToBuffer(base32: string): ArrayBuffer {
+    // Remove spaces, remove padding (= signs), and ensure uppercase
+    base32 = base32.replace(/\s/g, '').replace(/=+$/, '').toUpperCase(); 
+    let bits = '';
     
-    // For simplicity in this demo, we'll try to convert it as if it's Hex or throw an error.
-    if (base32.length % 2 !== 0) {
-         throw new Error('Base32 decoding failed or key length is invalid.');
+    // Convert Base32 chars to 5-bit binary strings
+    for (const char of base32) {
+        const val = BASE32_CHARS.indexOf(char);
+        if (val === -1) {
+            // Throw error for invalid characters
+            throw new Error(`Invalid Base32 character: ${char}`);
+        }
+        bits += val.toString(2).padStart(5, '0');
     }
-    
-    // Assuming a reliable decoding library is used here in a real project
-    const hex = base32; // Placeholder for decoded hex string
+
+    // Convert binary strings to 8-bit bytes
     const bytes = [];
-    for (let i = 0; i < hex.length; i += 2) {
-        bytes.push(parseInt(hex.substring(i, i + 2), 16));
+    for (let i = 0; i + 7 < bits.length; i += 8) {
+        const byte = bits.substring(i, i + 8);
+        bytes.push(parseInt(byte, 2));
     }
+
+    // Return the binary key data
     return new Uint8Array(bytes).buffer;
 }
 
@@ -50,7 +46,6 @@ function base32ToBuffer(base32: string): ArrayBuffer {
 async function generateTotpCode(secret: string): Promise<string> {
     try {
         // 1. Decode the secret key from Base32 to ArrayBuffer
-        // NOTE: The base32ToBuffer function above needs a robust implementation!
         const keyBuffer = base32ToBuffer(secret); 
 
         // 2. Calculate the counter value (C) based on current time
@@ -60,10 +55,8 @@ async function generateTotpCode(secret: string): Promise<string> {
         // Convert counter (number) to 8-byte buffer (big-endian)
         const counterBuffer = new ArrayBuffer(8);
         const view = new DataView(counterBuffer);
-        // Note: JS numbers are 64-bit float, but we need 64-bit int for counter.
-        // We handle the high/low 32-bit parts.
-        view.setUint32(0, 0); // High 32 bits (since epoch is small)
-        view.setUint32(4, counter, false); // Low 32 bits, big-endian (false)
+        view.setUint32(0, 0, false); // High 32 bits (0 for typical TOTP epoch)
+        view.setUint32(4, counter, false); // Low 32 bits, big-endian
 
         // 3. Import the key for HMAC operation
         const cryptoKey = await crypto.subtle.importKey(
@@ -95,7 +88,7 @@ async function generateTotpCode(secret: string): Promise<string> {
 
     } catch (e) {
         console.error('TOTP Generation Error:', e);
-        return 'ERROR: Invalid Secret Key or Implementation Error';
+        return 'ERROR: Decoding/Crypto Logic Failed';
     }
 }
 
@@ -157,23 +150,25 @@ export default {
             const secretKey = parts[1];
 
             if (secretKey) {
-                // Ensure secret key is uppercase (Base32 standard)
-                const totpCode = await generateTotpCode(secretKey.toUpperCase()); 
+                // Clean the secret key (remove spaces, ensure uppercase)
+                const cleanKey = secretKey.replace(/\s/g, '').toUpperCase();
+                
+                const totpCode = await generateTotpCode(cleanKey); 
                 
                 if (totpCode.startsWith('ERROR')) {
-                    responseText = `🚫 *Error*: Failed to generate code. Please check your Secret Key format.`;
+                    responseText = `🚫 *Error*: Code calculation failed. Secret Key မှန်မမှန် ပြန်စစ်ပါ။`;
                 } else {
                     const timeRemaining = TIME_STEP - (Math.floor(Date.now() / 1000) % TIME_STEP);
                     
                     responseText = 
                         `✅ ဂေါင်းကြီးရဲ့ 2FA Code:\n\n` + 
                         `\`${totpCode}\`\n\n` +
-                        `_Expires in ${timeRemaining} seconds_`;
+                        `_Code သက်တမ်း ${timeRemaining} စက္ကန့် ကျန်ပါသည်_`;
                 }
 
             } else {
-                responseText = '❌ *Usage*: Please provide your Base32 Secret Key after the command. \n\n' +
-                                'Example: `/code JBSWY3DPEHPK3PXP`';
+                responseText = '❌ *အသုံးပြုပုံ*: /code ပြီးနောက် Base32 Secret Key ကို ထည့်ပေးပါ။ \n\n' +
+                                'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
             }
         } else if (messageText.toLowerCase().startsWith('/start')) {
              responseText = 
@@ -182,7 +177,7 @@ export default {
                 'ပထမဦးဆုံး အသုံးပြုသူများ /code ဖြင့်သုံးပါ **နမူနာကို အောက်တွင် ကြည့်ပါ**.\n\n' +
                 'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
         } else {
-            responseText = "အသုံးပြုပုံ မှာနေပါတယ် ဂေါင်းကြီး `/code JBSWY3DPEHPK3PXP` command. အဆင်မပြေရင် /start ပြန်နှိပ်ပါ။.";
+            responseText = "အသုံးပြုပုံ မှားနေပါတယ် ဂေါင်းကြီး `/code JBSWY3DPEHPK3PXP` command. အဆင်မပြေရင် /start ပြန်နှိပ်ပါ။.";
         }
 
         // Send the response back to Telegram
