@@ -1,24 +1,13 @@
 name = "kp2fa"
-# The type defines this as a Worker project (not a Pages project).
-type = "javascript"
-# The main file to be executed. Note: Wrangler will automatically 
-# compile your TypeScript (index.ts) into JavaScript.
-entrypoint = "index.ts" 
 
-# --- Build Configuration (for TypeScript) ---
-# This ensures that TypeScript is compiled correctly.
-[build]
-command = "npm run build" # Optional: You can remove this line if you use only 'index.ts'
-                          # and don't rely on complex dependencies/build steps.
-                         
-# Wrangler automatically handles TS compilation if you set the 'main' field.
-# Since we use entrypoint="index.ts" above, Wrangler will handle compilation.
-
-# --- Worker Environment Configuration ---
-[env.production]
-# The name to deploy the Worker as (this creates tg2fa.YOUR_USERNAME.workers.dev)
-name = "kp2fa" 
-# The file that contains your Worker code.
+# 🛑 အဓိကပြင်ဆင်ချက်: entrypoint နဲ့ type ကို ဖြုတ်ပြီး main ကို သုံးပါ။
+# Wrangler က ဒီ file ကို သင့်ရဲ့ Worker Code file အဖြစ် သိပါလိမ့်မယ်။
 main = "index.ts" 
-compatibility_date = "2024-05-01" # Always use a recent date
-# compatibility_flags = ["url_standard"] # Optional flags for modern features
+
+# Compatibility date သည် မဖြစ်မနေ လိုအပ်ပါသည်။
+# သင့်ရဲ့ Log မှာ တွေ့ရတဲ့ ရက်စွဲအတိုင်း ထားနိုင်ပါတယ်။
+compatibility_date = "2024-05-01" 
+
+# --- Environment Section ကို ယာယီဖြုတ်ခြင်း ---
+# ⚠️ စတင်စမ်းသပ်ချိန်မှာ Deploy Warning ရှောင်ဖို့အတွက်
+# [env.production] section ကို ဖျက်လိုက်ပါ။
