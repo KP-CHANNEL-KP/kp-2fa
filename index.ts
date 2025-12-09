@@ -178,7 +178,7 @@ export default {
         } else if (messageText.toLowerCase().startsWith('/start')) {
              responseText = 
                 '👋 KP ရဲ့ 2FA bot မှကြိုဆိုပါတယ်!\n\n' +
-                'Telegram Channel => https://t.me/KP_CHANNEL_KP.\n\n' +
+                'Telegram Channel => https://t.me/addlist/DaVvvOWfdg05NDJl.\n\n' +
                 'ပထမဦးဆုံး အသုံးပြုသူများ /code ဖြင့်သုံးပါ **နမူနာကို အောက်တွင် ကြည့်ပါ**.\n\n' +
                 'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
         } else {
