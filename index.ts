@@ -1,7 +1,7 @@
 // index.ts
 
 // Replace YOUR_BOT_TOKEN with the actual token you got from BotFather
-const BOT_TOKEN = 'YOUR_BOT_TOKEN'; 
+const BOT_TOKEN = '8581058292:AAHKD5H5PxTuGB7UaSsuhyskUYLoAXHUXz0'; 
 const TIME_STEP = 30; // TOTP time step in seconds (standard is 30)
 const DIGITS = 6;     // TOTP code length (standard is 6)
 const ALGORITHM = 'SHA-1'; // HMAC algorithm (standard is SHA-1)
