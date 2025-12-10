@@ -1,188 +1,158 @@
-// index.ts (Fixing the Base32 Decoding Logic)
+// index.ts - No KV Version (Stateless)
 
-// Replace YOUR_BOT_TOKEN with the actual token you got from BotFather
+// ⚠️ သင့် Bot Token ကို ဒီမှာ ပြောင်းထည့်ပါ
 const BOT_TOKEN = '8581058292:AAHKD5H5PxTuGB7UaSsuhyskUYLoAXHUXz0'; 
-const TIME_STEP = 30; // TOTP time step in seconds (standard is 30)
-const DIGITS = 6;     // TOTP code length (standard is 6)
-const ALGORITHM = 'SHA-1'; // HMAC algorithm (standard is SHA-1)
 
-// --- 1. TOTP (Time-based One-Time Password) Logic ---
+const TIME_STEP = 30; 
+const DIGITS = 6;     
+const ALGORITHM = 'SHA-1'; 
 
-// --- Base32 Decoding Function (The Critical Fix) ---
-// This is a robust Base32 decoding implementation required for real 2FA secrets.
+// --- 1. Base32 Decoder (Robust Version) ---
 const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 function base32ToBuffer(base32: string): ArrayBuffer {
-    // Remove spaces, remove padding (= signs), and ensure uppercase
+    // Space တွေဖယ်၊ padding (=) တွေဖယ်၊ အကြီးစာလုံးပြောင်း
     base32 = base32.replace(/\s/g, '').replace(/=+$/, '').toUpperCase(); 
     let bits = '';
     
-    // Convert Base32 chars to 5-bit binary strings
     for (const char of base32) {
         const val = BASE32_CHARS.indexOf(char);
         if (val === -1) {
-            // Throw error for invalid characters
             throw new Error(`Invalid Base32 character: ${char}`);
         }
         bits += val.toString(2).padStart(5, '0');
     }
 
-    // Convert binary strings to 8-bit bytes
     const bytes = [];
     for (let i = 0; i + 7 < bits.length; i += 8) {
         const byte = bits.substring(i, i + 8);
         bytes.push(parseInt(byte, 2));
     }
 
-    // Return the binary key data
     return new Uint8Array(bytes).buffer;
 }
 
-/**
- * Generates a TOTP code using Web Crypto API.
- * @param secret Base32 encoded secret key.
- * @returns The 6-digit TOTP code as a string.
- */
+// --- 2. TOTP Generator (Web Crypto API) ---
 async function generateTotpCode(secret: string): Promise<string> {
     try {
-        // 1. Decode the secret key from Base32 to ArrayBuffer
         const keyBuffer = base32ToBuffer(secret); 
-
-        // 2. Calculate the counter value (C) based on current time
         const epoch = Math.floor(Date.now() / 1000);
         const counter = Math.floor(epoch / TIME_STEP);
         
-        // Convert counter (number) to 8-byte buffer (big-endian)
         const counterBuffer = new ArrayBuffer(8);
         const view = new DataView(counterBuffer);
-        view.setUint32(0, 0, false); // High 32 bits (0 for typical TOTP epoch)
-        view.setUint32(4, counter, false); // Low 32 bits, big-endian
+        view.setUint32(0, 0, false); 
+        view.setUint32(4, counter, false); 
 
-        // 3. Import the key for HMAC operation
         const cryptoKey = await crypto.subtle.importKey(
-            'raw',
-            keyBuffer,
-            { name: 'HMAC', hash: { name: ALGORITHM } },
-            false, // not extractable
-            ['sign']
+            'raw', keyBuffer, { name: 'HMAC', hash: { name: ALGORITHM } }, false, ['sign']
         );
 
-        // 4. Generate the HMAC hash
-        const signature = await crypto.subtle.sign(
-            'HMAC',
-            cryptoKey,
-            counterBuffer
-        );
-        
-        // 5. Dynamic Truncation (DT)
+        const signature = await crypto.subtle.sign('HMAC', cryptoKey, counterBuffer);
         const hash = new Uint8Array(signature);
         const offset = hash[hash.length - 1] & 0xf;
         
-        // Extract 4 bytes from hash starting at offset (big-endian)
         const truncatedHash = new DataView(signature, offset, 4);
-        let code = truncatedHash.getUint32(0, false) & 0x7fffffff; // Apply 31-bit mask
+        let code = truncatedHash.getUint32(0, false) & 0x7fffffff; 
 
-        // 6. Format to DIGITS length
         code %= Math.pow(10, DIGITS);
         return String(code).padStart(DIGITS, '0');
 
     } catch (e) {
-        console.error('TOTP Generation Error:', e);
-        return 'ERROR: Decoding/Crypto Logic Failed';
+        console.error('TOTP Error:', e);
+        return 'ERROR';
     }
 }
 
-
-// --- 2. Telegram Bot Communication Logic ---
-
-/**
- * Sends a message back to the Telegram user.
- */
+// --- 3. Telegram Send Message ---
 async function sendMessage(chatId: number, text: string): Promise<void> {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-    
     await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: text,
-            parse_mode: 'Markdown',
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'Markdown' }),
     });
 }
 
-// Telegram Update Interface
+// --- Interfaces ---
 interface TelegramUpdate {
     message?: {
         chat: {
             id: number;
+            type: 'private' | 'group' | 'supergroup'; // Chat Type စစ်ရန်
         };
         text: string;
     };
 }
 
-
-// --- 3. Main Worker Fetch Handler ---
-
+// --- 4. Main Worker Logic ---
 export default {
     async fetch(request: Request): Promise<Response> {
-        // Only process Telegram Webhook (POST) requests
-        if (request.method !== 'POST') {
-            return new Response('Method Not Allowed', { status: 405 });
-        }
+        if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
 
         const update: TelegramUpdate = await request.json();
-        const chatId = update.message?.chat.id;
-        const messageText = update.message?.text?.trim();
+        const message = update.message;
 
-        if (!chatId || !messageText) {
-            return new Response('No valid message received', { status: 200 });
+        // Message မရှိရင် ဘာမှမလုပ်ဘူး
+        if (!message || !message.text) return new Response('OK');
+
+        const chatId = message.chat.id;
+        const text = message.text.trim();
+        const chatType = message.chat.type;
+
+        // --- GROUP FILTER LOGIC ---
+        // Command ဟုတ်မဟုတ် စစ်ဆေးခြင်း (/code သို့မဟုတ် /start)
+        const isCommand = text.toLowerCase().startsWith('/code') || text.toLowerCase().startsWith('/start');
+        const isGroup = chatType === 'group' || chatType === 'supergroup';
+
+        // Group ထဲမှာဖြစ်ပြီး Command မဟုတ်ရင် လုံးဝ Ignore လုပ်မည်
+        if (isGroup && !isCommand) {
+            return new Response('OK - Group Message Ignored');
         }
 
-        let responseText: string;
+        let responseText = '';
 
-        // Command processing: /code <SECRET_KEY>
-        if (messageText.toLowerCase().startsWith('/code')) {
-            const parts = messageText.split(/\s+/);
-            const secretKey = parts[1];
+        // --- Command Handling ---
+
+        // 1. /code <KEY>
+        if (text.toLowerCase().startsWith('/code')) {
+            const parts = text.split(/\s+/);
+            const secretKey = parts[1]; // ဒုတိယ စာလုံးကို ယူမည် (Key)
 
             if (secretKey) {
-                // Clean the secret key (remove spaces, ensure uppercase)
                 const cleanKey = secretKey.replace(/\s/g, '').toUpperCase();
-                
-                const totpCode = await generateTotpCode(cleanKey); 
-                
-                if (totpCode.startsWith('ERROR')) {
-                    responseText = `🚫 *Error*: Code calculation failed. Secret Key မှန်မမှန် ပြန်စစ်ပါ။`;
+                const totpCode = await generateTotpCode(cleanKey);
+
+                if (totpCode === 'ERROR') {
+                    responseText = `🚫 *Error*: Secret Key ပုံစံမမှန်ပါ။`;
                 } else {
                     const timeRemaining = TIME_STEP - (Math.floor(Date.now() / 1000) % TIME_STEP);
-                    
-                    responseText = 
-                        `✅ ဂေါင်းကြီးရဲ့ 2FA Code:\n\n` + 
-                        `\`${totpCode}\`\n\n` +
-                        `_Code သက်တမ်း ${timeRemaining} စက္ကန့် ကျန်ပါသည်_`;
+                    responseText = `🔐 *2FA Code*: \`${totpCode}\`\n⏳ Exp: ${timeRemaining}s`;
                 }
-
             } else {
-                responseText = '❌ *အသုံးပြုပုံ*: /code ပြီးနောက် Base32 Secret Key ကို ထည့်ပေးပါ။ \n\n' +
-                                'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
+                // Key မပါလာရင်
+                responseText = '⚠️ *အသုံးပြုပုံ*: `/code <YOUR_SECRET_KEY>`\n\nဥပမာ: `/code JBSWY3DPEHPK3PXP`';
             }
-        } else if (messageText.toLowerCase().startsWith('/start')) {
-             responseText = 
-                '👋 KP ရဲ့ 2FA bot မှကြိုဆိုပါတယ်!\n\n' +
-                'Telegram Channel => https://t.me/addlist/DaVvvOWfdg05NDJl.\n\n' +
-                'ပထမဦးဆုံး အသုံးပြုသူများ /code ဖြင့်သုံးပါ **နမူနာကို အောက်တွင် ကြည့်ပါ**.\n\n' +
-                'နမူနာ: `/code JBSWY3DPEHPK3PXP`';
-        } else {
-            responseText = "အသုံးပြုပုံ မှားနေပါတယ် ဂေါင်းကြီး `/code JBSWY3DPEHPK3PXP` command. အဆင်မပြေရင် /start ပြန်နှိပ်ပါ။.";
+
+        // 2. /start
+        } else if (text.toLowerCase().startsWith('/start')) {
+            responseText = 
+                '👋 **KP 2FA Bot မှ ကြိုဆိုပါတယ်!**\n\n' +
+                'အသုံးပြုရလွယ်ကူအောင် ပြင်ဆင်ထားပါတယ်\n\n' +
+                'အသုံးပြုလိုပါက `/code` နောက်မှာ Key ထည့်ရိုက်ပါ။\n\n' +
+                '✅ နမူနာ: `/code JBSWY3DPEHPK3PXP`';
+        } 
+        
+        // Private Chat တွင် Command မှားနေလျှင်
+        else if (!isGroup) {
+            responseText = "Command မှားနေပါတယ် ဂေါင်းကြီး။ `/code <KEY>` ကိုသုံးပါ။";
         }
 
-        // Send the response back to Telegram
-        await sendMessage(chatId, responseText);
-        
-        return new Response('OK', { status: 200 });
+        // စာပြန်မည် (Response Text ရှိမှသာ)
+        if (responseText) {
+            await sendMessage(chatId, responseText);
+        }
+
+        return new Response('OK');
     },
 };
