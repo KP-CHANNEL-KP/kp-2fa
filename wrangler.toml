@@ -1,4 +1,4 @@
-name = "kp2fa"
+name = "kp-2fa"
 
 # 🛑 အဓိကပြင်ဆင်ချက်: entrypoint နဲ့ type ကို ဖြုတ်ပြီး main ကို သုံးပါ။
 # Wrangler က ဒီ file ကို သင့်ရဲ့ Worker Code file အဖြစ် သိပါလိမ့်မယ်။
